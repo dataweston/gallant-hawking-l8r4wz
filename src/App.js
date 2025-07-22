@@ -1,0 +1,690 @@
+import React, { useState, useEffect } from "react";
+import {
+  Calendar,
+  Plus,
+  DollarSign,
+  TrendingUp,
+  ShoppingCart,
+  Edit3,
+  Save,
+  X,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+
+const CateringSalesApp = () => {
+  const [events, setEvents] = useState([]);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [editingEvent, setEditingEvent] = useState(null);
+  const [activeView, setActiveView] = useState("calendar");
+  const [selectedMonthForSpending, setSelectedMonthForSpending] = useState(
+    new Date()
+  );
+
+  // Sample data initialization
+  useEffect(() => {
+    const sampleEvents = [
+      {
+        id: 1,
+        title: "Corporate Lunch - TechCorp",
+        date: new Date(2025, 6, 25), // July 25, 2025
+        estimatedRevenue: 2500,
+        estimatedFoodCost: 600,
+        estimatedLaborCost: 400,
+        actualRevenue: 0,
+        actualFoodCost: 0,
+        actualLaborCost: 0,
+        status: "confirmed",
+        notes: "50 people, dietary restrictions: 5 vegetarian, 2 gluten-free",
+        lists: ["Appetizers", "Main course", "Desserts", "Beverages"],
+      },
+      {
+        id: 2,
+        title: "Wedding Reception - Johnson",
+        date: new Date(2025, 7, 15), // August 15, 2025
+        estimatedRevenue: 8500,
+        estimatedFoodCost: 2400,
+        estimatedLaborCost: 1000,
+        actualRevenue: 0,
+        actualFoodCost: 0,
+        actualLaborCost: 0,
+        status: "confirmed",
+        notes: "150 guests, outdoor venue, backup indoor plan needed",
+        lists: [
+          "Cocktail hour menu",
+          "Dinner service",
+          "Late night snacks",
+          "Bar service",
+        ],
+      },
+    ];
+    setEvents(sampleEvents);
+  }, []);
+
+  const [newEvent, setNewEvent] = useState({
+    title: "",
+    date: new Date(),
+    estimatedRevenue: "",
+    estimatedFoodCost: "",
+    estimatedLaborCost: "",
+    status: "pending",
+    notes: "",
+    lists: [],
+  });
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+    }).format(amount);
+  };
+
+  const getCurrentYearData = () => {
+    const currentYear = new Date().getFullYear();
+    const today = new Date();
+    const currentYearEvents = events.filter(
+      (event) => event.date.getFullYear() === currentYear && event.date >= today
+    );
+
+    const totalFutureRevenue = currentYearEvents.reduce(
+      (sum, event) => sum + (event.actualRevenue || event.estimatedRevenue),
+      0
+    );
+
+    const totalFutureFoodCost = currentYearEvents.reduce(
+      (sum, event) => sum + (event.actualFoodCost || event.estimatedFoodCost),
+      0
+    );
+
+    const totalFutureLaborCost = currentYearEvents.reduce(
+      (sum, event) => sum + (event.actualLaborCost || event.estimatedLaborCost),
+      0
+    );
+
+    return { totalFutureRevenue, totalFutureFoodCost, totalFutureLaborCost };
+  };
+
+  const getMonthlyFoodSpending = (month = selectedMonthForSpending) => {
+    const targetMonth = month.getMonth();
+    const targetYear = month.getFullYear();
+
+    return events
+      .filter(
+        (event) =>
+          event.date.getMonth() === targetMonth &&
+          event.date.getFullYear() === targetYear
+      )
+      .reduce(
+        (sum, event) => sum + (event.actualFoodCost || event.estimatedFoodCost),
+        0
+      );
+  };
+
+  const handleSaveEvent = () => {
+    if (editingEvent) {
+      setEvents(
+        events.map((event) =>
+          event.id === editingEvent.id
+            ? {
+                ...newEvent,
+                id: editingEvent.id,
+                date: new Date(newEvent.date),
+              }
+            : event
+        )
+      );
+      setEditingEvent(null);
+    } else {
+      const event = {
+        ...newEvent,
+        id: Date.now(),
+        date: new Date(newEvent.date),
+        estimatedRevenue: parseFloat(newEvent.estimatedRevenue) || 0,
+        estimatedCOGS: parseFloat(newEvent.estimatedCOGS) || 0,
+        actualRevenue: 0,
+        actualCOGS: 0,
+      };
+      setEvents([...events, event]);
+    }
+
+    setShowEventModal(false);
+    setNewEvent({
+      title: "",
+      date: new Date(),
+      estimatedRevenue: "",
+      estimatedCOGS: "",
+      status: "pending",
+      notes: "",
+      lists: [],
+    });
+  };
+
+  const openEditModal = (event) => {
+    setEditingEvent(event);
+    setNewEvent({
+      title: event.title,
+      date: event.date,
+      estimatedRevenue: event.estimatedRevenue.toString(),
+      estimatedFoodCost: event.estimatedFoodCost.toString(),
+      estimatedLaborCost: event.estimatedLaborCost.toString(),
+      status: event.status,
+      notes: event.notes || "",
+      lists: event.lists || [],
+    });
+    setShowEventModal(true);
+  };
+
+  const renderCalendar = () => {
+    const today = new Date();
+    const currentMonth = selectedDate.getMonth();
+    const currentYear = selectedDate.getFullYear();
+
+    const firstDay = new Date(currentYear, currentMonth, 1);
+    const lastDay = new Date(currentYear, currentMonth + 1, 0);
+    const startDate = new Date(firstDay);
+    startDate.setDate(startDate.getDate() - firstDay.getDay());
+
+    const days = [];
+    const currentDate = new Date(startDate);
+
+    for (let i = 0; i < 42; i++) {
+      const dayEvents = events.filter(
+        (event) => event.date.toDateString() === currentDate.toDateString()
+      );
+
+      days.push({
+        date: new Date(currentDate),
+        isCurrentMonth: currentDate.getMonth() === currentMonth,
+        isToday: currentDate.toDateString() === today.toDateString(),
+        events: dayEvents,
+      });
+
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    return (
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-900">
+            {selectedDate.toLocaleDateString("en-US", {
+              month: "long",
+              year: "numeric",
+            })}
+          </h2>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() =>
+                setSelectedDate(
+                  new Date(
+                    selectedDate.getFullYear(),
+                    selectedDate.getMonth() - 1
+                  )
+                )
+              }
+              className="p-1 hover:bg-gray-100 rounded"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setSelectedDate(new Date())}
+              className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+            >
+              Today
+            </button>
+            <button
+              onClick={() =>
+                setSelectedDate(
+                  new Date(
+                    selectedDate.getFullYear(),
+                    selectedDate.getMonth() + 1
+                  )
+                )
+              }
+              className="p-1 hover:bg-gray-100 rounded"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-7 gap-0 text-sm">
+          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+            <div
+              key={day}
+              className="p-3 text-center font-medium text-gray-500 border-b border-gray-100"
+            >
+              {day}
+            </div>
+          ))}
+
+          {days.map((day, index) => (
+            <div
+              key={index}
+              className={`min-h-24 p-2 border-b border-r border-gray-100 ${
+                !day.isCurrentMonth ? "bg-gray-50" : "bg-white hover:bg-gray-50"
+              } ${day.isToday ? "bg-blue-50" : ""}`}
+            >
+              <div
+                className={`text-sm ${
+                  !day.isCurrentMonth
+                    ? "text-gray-400"
+                    : day.isToday
+                    ? "text-blue-700 font-semibold"
+                    : "text-gray-900"
+                }`}
+              >
+                {day.date.getDate()}
+              </div>
+              {day.events.map((event) => (
+                <div
+                  key={event.id}
+                  onClick={() => openEditModal(event)}
+                  className={`mt-1 p-1 text-xs rounded cursor-pointer truncate ${
+                    event.status === "confirmed"
+                      ? "bg-green-100 text-green-800"
+                      : event.status === "pending"
+                      ? "bg-yellow-100 text-yellow-800"
+                      : "bg-gray-100 text-gray-800"
+                  }`}
+                >
+                  {event.title}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderFinancials = () => {
+    const { totalFutureRevenue, totalFutureFoodCost, totalFutureLaborCost } =
+      getCurrentYearData();
+    const monthlySpending = getMonthlyFoodSpending();
+    const totalFutureCOGS = totalFutureFoodCost + totalFutureLaborCost;
+    const grossMargin = totalFutureRevenue - totalFutureCOGS;
+
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">
+                  Future Revenue (This Year)
+                </p>
+                <p className="text-2xl font-semibold text-green-600">
+                  {formatCurrency(totalFutureRevenue)}
+                </p>
+              </div>
+              <TrendingUp className="w-8 h-8 text-green-500" />
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Future Food Costs</p>
+                <p className="text-2xl font-semibold text-red-600">
+                  {formatCurrency(totalFutureFoodCost)}
+                </p>
+              </div>
+              <ShoppingCart className="w-8 h-8 text-red-500" />
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Future Labor Costs</p>
+                <p className="text-2xl font-semibold text-orange-600">
+                  {formatCurrency(totalFutureLaborCost)}
+                </p>
+              </div>
+              <DollarSign className="w-8 h-8 text-orange-500" />
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Future Gross Margin</p>
+                <p className="text-2xl font-semibold text-blue-600">
+                  {formatCurrency(grossMargin)}
+                </p>
+              </div>
+              <TrendingUp className="w-8 h-8 text-blue-500" />
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-sm text-gray-600">Monthly Food Spending</p>
+                <p className="text-2xl font-semibold text-gray-900">
+                  {formatCurrency(monthlySpending)}
+                </p>
+              </div>
+              <ShoppingCart className="w-8 h-8 text-gray-500" />
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() =>
+                  setSelectedMonthForSpending(
+                    new Date(
+                      selectedMonthForSpending.getFullYear(),
+                      selectedMonthForSpending.getMonth() - 1
+                    )
+                  )
+                }
+                className="p-1 hover:bg-gray-100 rounded"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-sm font-medium text-gray-700 min-w-24 text-center">
+                {selectedMonthForSpending.toLocaleDateString("en-US", {
+                  month: "short",
+                  year: "numeric",
+                })}
+              </span>
+              <button
+                onClick={() =>
+                  setSelectedMonthForSpending(
+                    new Date(
+                      selectedMonthForSpending.getFullYear(),
+                      selectedMonthForSpending.getMonth() + 1
+                    )
+                  )
+                }
+                className="p-1 hover:bg-gray-100 rounded"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          <div className="p-4 border-b border-gray-200">
+            <h3 className="text-lg font-semibold">Upcoming Events</h3>
+          </div>
+          <div className="p-4">
+            {events
+              .filter((event) => event.date >= new Date())
+              .sort((a, b) => a.date - b.date)
+              .slice(0, 5)
+              .map((event) => (
+                <div
+                  key={event.id}
+                  className="flex justify-between items-center py-3 border-b border-gray-100 last:border-b-0 cursor-pointer hover:bg-gray-50 rounded px-2"
+                  onClick={() => openEditModal(event)}
+                >
+                  <div>
+                    <p className="font-medium text-gray-900">{event.title}</p>
+                    <p className="text-sm text-gray-600">
+                      {event.date.toLocaleDateString("en-US", {
+                        weekday: "short",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-medium text-green-600">
+                      {formatCurrency(event.estimatedRevenue)}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      Food: {formatCurrency(event.estimatedFoodCost)} | Labor:{" "}
+                      {formatCurrency(event.estimatedLaborCost)}
+                    </p>
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex justify-between items-center">
+            <h1 className="text-2xl font-bold text-gray-900">
+              Local Effort Calendar and Budget
+            </h1>
+            <button
+              onClick={() => setShowEventModal(true)}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              <span>New Event</span>
+            </button>
+          </div>
+
+          <nav className="mt-4">
+            <div className="flex space-x-6">
+              <button
+                onClick={() => setActiveView("calendar")}
+                className={`pb-2 border-b-2 font-medium text-sm transition-colors ${
+                  activeView === "calendar"
+                    ? "border-blue-500 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                <Calendar className="w-4 h-4 inline mr-2" />
+                Calendar
+              </button>
+              <button
+                onClick={() => setActiveView("financials")}
+                className={`pb-2 border-b-2 font-medium text-sm transition-colors ${
+                  activeView === "financials"
+                    ? "border-blue-500 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                <DollarSign className="w-4 h-4 inline mr-2" />
+                Financials
+              </button>
+            </div>
+          </nav>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 py-8">
+        {activeView === "calendar" ? renderCalendar() : renderFinancials()}
+      </main>
+
+      {/* Event Modal */}
+      {showEventModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-screen overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">
+                  {editingEvent ? "Edit Event" : "New Event"}
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowEventModal(false);
+                    setEditingEvent(null);
+                    setNewEvent({
+                      title: "",
+                      date: new Date(),
+                      estimatedRevenue: "",
+                      estimatedFoodCost: "",
+                      estimatedLaborCost: "",
+                      status: "pending",
+                      notes: "",
+                      lists: [],
+                    });
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Event Title
+                  </label>
+                  <input
+                    type="text"
+                    value={newEvent.title}
+                    onChange={(e) =>
+                      setNewEvent({ ...newEvent, title: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter event title"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Date
+                  </label>
+                  <input
+                    type="date"
+                    value={newEvent.date.toISOString().split("T")[0]}
+                    onChange={(e) =>
+                      setNewEvent({
+                        ...newEvent,
+                        date: new Date(e.target.value),
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Estimated Revenue
+                  </label>
+                  <input
+                    type="number"
+                    value={newEvent.estimatedRevenue}
+                    onChange={(e) =>
+                      setNewEvent({
+                        ...newEvent,
+                        estimatedRevenue: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Estimated Food Cost
+                    </label>
+                    <input
+                      type="number"
+                      value={newEvent.estimatedFoodCost}
+                      onChange={(e) =>
+                        setNewEvent({
+                          ...newEvent,
+                          estimatedFoodCost: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Estimated Labor Cost
+                    </label>
+                    <input
+                      type="number"
+                      value={newEvent.estimatedLaborCost}
+                      onChange={(e) =>
+                        setNewEvent({
+                          ...newEvent,
+                          estimatedLaborCost: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Status
+                  </label>
+                  <select
+                    value={newEvent.status}
+                    onChange={(e) =>
+                      setNewEvent({ ...newEvent, status: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="confirmed">Confirmed</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Notes
+                  </label>
+                  <textarea
+                    value={newEvent.notes}
+                    onChange={(e) =>
+                      setNewEvent({ ...newEvent, notes: e.target.value })
+                    }
+                    rows="3"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Add any notes about this event..."
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowEventModal(false);
+                    setEditingEvent(null);
+                    setNewEvent({
+                      title: "",
+                      date: new Date(),
+                      estimatedRevenue: "",
+                      estimatedFoodCost: "",
+                      estimatedLaborCost: "",
+                      status: "pending",
+                      notes: "",
+                      lists: [],
+                    });
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveEvent}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+                >
+                  <Save className="w-4 h-4 inline mr-2" />
+                  Save Event
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default CateringSalesApp;
