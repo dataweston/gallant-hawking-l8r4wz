@@ -115,7 +115,6 @@ const CateringSalesApp = () => {
     // The function is now async to wait for the database operation
     const eventData = {
         ...newEvent,
-        date: new Date(newEvent.date), // Ensure it's a Date object for Firestore
         estimatedRevenue: parseFloat(newEvent.estimatedRevenue) || 0,
         estimatedFoodCost: parseFloat(newEvent.estimatedFoodCost) || 0,
         estimatedLaborCost: parseFloat(newEvent.estimatedLaborCost) || 0,
