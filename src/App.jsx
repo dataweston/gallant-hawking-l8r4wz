@@ -21,29 +21,25 @@ const CateringSalesApp = () => {
   const [selectedMonthForSpending, setSelectedMonthForSpending] = useState(new Date());
 
   // --- DATA FETCHING from FIRESTORE ---
-  // This useEffect will listen for real-time updates from the 'events' collection
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'events'), (snapshot) => {
       const eventsData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
-        // Convert Firestore Timestamp to JavaScript Date object
-        date: doc.data().date.toDate(),
+        date: doc.data().date ? doc.data().date.toDate() : new Date(),
         repeatUntil: doc.data().repeatUntil ? doc.data().repeatUntil.toDate() : new Date()
       }));
       setEvents(eventsData);
     });
-    // Cleanup function to unsubscribe from the listener when the component unmounts
     return () => unsubscribe();
-  }, []); // Empty dependency array means this runs once on mount
+  }, []);
 
-  // Listener for the 'receipts' collection
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'receipts'), (snapshot) => {
       const receiptsData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
-        date: doc.data().date.toDate(),
+        date: doc.data().date ? doc.data().date.toDate() : new Date(),
       }));
       setReceipts(receiptsData);
     });
@@ -112,33 +108,25 @@ const CateringSalesApp = () => {
 
   // --- DATA MODIFICATION with FIRESTORE ---
   const handleSaveEvent = async () => {
-    // The function is now async to wait for the database operation
     const eventData = {
         ...newEvent,
         estimatedRevenue: parseFloat(newEvent.estimatedRevenue) || 0,
         estimatedFoodCost: parseFloat(newEvent.estimatedFoodCost) || 0,
         estimatedLaborCost: parseFloat(newEvent.estimatedLaborCost) || 0,
-        // Ensure other fields that might not be set are given default values
         actualRevenue: newEvent.actualRevenue || 0,
         actualFoodCost: newEvent.actualFoodCost || 0,
         actualLaborCost: newEvent.actualLaborCost || 0,
     };
     
     if (editingEvent) {
-      // Update an existing document
       const eventDoc = doc(db, 'events', editingEvent.id);
       await updateDoc(eventDoc, eventData);
       setEditingEvent(null);
     } else {
-      // Add a new document
       await addDoc(collection(db, 'events'), eventData);
-      // NOTE: Repetition logic is not implemented for Firestore in this example.
-      // You would need to loop and call addDoc multiple times if you want to restore that feature.
     }
 
-    // We no longer need to call setEvents manually! `onSnapshot` handles it.
     setShowEventModal(false);
-    // Reset form
     setNewEvent({
       title: '', date: new Date(), estimatedRevenue: '', estimatedFoodCost: '',
       estimatedLaborCost: '', status: 'pending', notes: '', lists: [],
@@ -150,7 +138,6 @@ const CateringSalesApp = () => {
     if (window.confirm('Are you sure you want to delete this event?')) {
       const eventDoc = doc(db, 'events', eventId);
       await deleteDoc(eventDoc);
-      // UI updates automatically via onSnapshot
       setShowEventModal(false);
       setEditingEvent(null);
     }
@@ -171,15 +158,13 @@ const CateringSalesApp = () => {
     setEditingEvent(event);
     setNewEvent({
       ...event,
-      date: event.date, // Already a Date object
+      date: event.date,
       estimatedRevenue: event.estimatedRevenue.toString(),
       estimatedFoodCost: event.estimatedFoodCost.toString(),
       estimatedLaborCost: event.estimatedLaborCost.toString(),
     });
     setShowEventModal(true);
   };
-
-  // --- ALL RENDER FUNCTIONS & JSX REMAIN UNCHANGED ---
 
   const renderCalendar = () => {
     const today = new Date();
@@ -743,7 +728,7 @@ const CateringSalesApp = () => {
                   <input
                     type="date"
                     value={newEvent.date.toISOString().split('T')[0]}
-                    onChange={(e) => setNewEvent({...newEvent, date: new Date(e.target.value)})}
+                    onChange={(e) => setNewEvent({...newEvent, date: new Date(e.target.value.replace(/-/g, '\/'))})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
@@ -829,7 +814,7 @@ const CateringSalesApp = () => {
                         <input
                           type="date"
                           value={newEvent.repeatUntil.toISOString().split('T')[0]}
-                          onChange={(e) => setNewEvent({ ...newEvent, repeatUntil: new Date(e.target.value) })}
+                          onChange={(e) => setNewEvent({ ...newEvent, repeatUntil: new Date(e.target.value.replace(/-/g, '\/')) })}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
@@ -939,7 +924,7 @@ const CateringSalesApp = () => {
                   <input
                     type="date"
                     value={newReceipt.date.toISOString().split('T')[0]}
-                    onChange={(e) => setNewReceipt({...newReceipt, date: new Date(e.target.value)})}
+                    onChange={(e) => setNewReceipt({...newReceipt, date: new Date(e.target.value.replace(/-/g, '\/'))})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500"
                   />
                 </div>
