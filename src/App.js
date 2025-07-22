@@ -1,27 +1,17 @@
-import React, { useState, useEffect } from "react";
-import {
-  Calendar,
-  Plus,
-  DollarSign,
-  TrendingUp,
-  ShoppingCart,
-  Edit3,
-  Save,
-  X,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import React, { useState, useEffect } from 'react';
+import { Calendar, Plus, DollarSign, TrendingUp, ShoppingCart, Edit3, Save, X, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const CateringSalesApp = () => {
   const [events, setEvents] = useState([]);
+  const [receipts, setReceipts] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showEventModal, setShowEventModal] = useState(false);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
-  const [activeView, setActiveView] = useState("calendar");
-  const [selectedMonthForSpending, setSelectedMonthForSpending] = useState(
-    new Date()
-  );
-
+  const [activeView, setActiveView] = useState('calendar');
+  const [calendarView, setCalendarView] = useState('monthly'); // monthly, 3month, annual
+  const [selectedMonthForSpending, setSelectedMonthForSpending] = useState(new Date());
+  
   // Sample data initialization
   useEffect(() => {
     const sampleEvents = [
@@ -35,9 +25,9 @@ const CateringSalesApp = () => {
         actualRevenue: 0,
         actualFoodCost: 0,
         actualLaborCost: 0,
-        status: "confirmed",
+        status: 'confirmed',
         notes: "50 people, dietary restrictions: 5 vegetarian, 2 gluten-free",
-        lists: ["Appetizers", "Main course", "Desserts", "Beverages"],
+        lists: ["Appetizers", "Main course", "Desserts", "Beverages"]
       },
       {
         id: 2,
@@ -49,57 +39,71 @@ const CateringSalesApp = () => {
         actualRevenue: 0,
         actualFoodCost: 0,
         actualLaborCost: 0,
-        status: "confirmed",
+        status: 'confirmed',
         notes: "150 guests, outdoor venue, backup indoor plan needed",
-        lists: [
-          "Cocktail hour menu",
-          "Dinner service",
-          "Late night snacks",
-          "Bar service",
-        ],
-      },
+        lists: ["Cocktail hour menu", "Dinner service", "Late night snacks", "Bar service"]
+      }
     ];
     setEvents(sampleEvents);
+
+    const sampleReceipts = [
+      {
+        id: 1,
+        store: "Whole Foods Market",
+        total: 245.67,
+        date: new Date(2025, 6, 20) // July 20, 2025
+      },
+      {
+        id: 2,
+        store: "Restaurant Depot",
+        total: 189.43,
+        date: new Date(2025, 6, 22) // July 22, 2025
+      }
+    ];
+    setReceipts(sampleReceipts);
   }, []);
 
   const [newEvent, setNewEvent] = useState({
-    title: "",
+    title: '',
     date: new Date(),
-    estimatedRevenue: "",
-    estimatedFoodCost: "",
-    estimatedLaborCost: "",
-    status: "pending",
-    notes: "",
-    lists: [],
+    estimatedRevenue: '',
+    estimatedFoodCost: '',
+    estimatedLaborCost: '',
+    status: 'pending',
+    notes: '',
+    lists: []
+  });
+
+  const [newReceipt, setNewReceipt] = useState({
+    store: '',
+    total: '',
+    date: new Date()
   });
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD'
     }).format(amount);
   };
 
   const getCurrentYearData = () => {
     const currentYear = new Date().getFullYear();
     const today = new Date();
-    const currentYearEvents = events.filter(
-      (event) => event.date.getFullYear() === currentYear && event.date >= today
+    const currentYearEvents = events.filter(event => 
+      event.date.getFullYear() === currentYear && event.date >= today
+    );
+    
+    const totalFutureRevenue = currentYearEvents.reduce((sum, event) => 
+      sum + (event.actualRevenue || event.estimatedRevenue), 0
+    );
+    
+    const totalFutureFoodCost = currentYearEvents.reduce((sum, event) => 
+      sum + (event.actualFoodCost || event.estimatedFoodCost), 0
     );
 
-    const totalFutureRevenue = currentYearEvents.reduce(
-      (sum, event) => sum + (event.actualRevenue || event.estimatedRevenue),
-      0
-    );
-
-    const totalFutureFoodCost = currentYearEvents.reduce(
-      (sum, event) => sum + (event.actualFoodCost || event.estimatedFoodCost),
-      0
-    );
-
-    const totalFutureLaborCost = currentYearEvents.reduce(
-      (sum, event) => sum + (event.actualLaborCost || event.estimatedLaborCost),
-      0
+    const totalFutureLaborCost = currentYearEvents.reduce((sum, event) => 
+      sum + (event.actualLaborCost || event.estimatedLaborCost), 0
     );
 
     return { totalFutureRevenue, totalFutureFoodCost, totalFutureLaborCost };
@@ -108,32 +112,22 @@ const CateringSalesApp = () => {
   const getMonthlyFoodSpending = (month = selectedMonthForSpending) => {
     const targetMonth = month.getMonth();
     const targetYear = month.getFullYear();
-
-    return events
-      .filter(
-        (event) =>
-          event.date.getMonth() === targetMonth &&
-          event.date.getFullYear() === targetYear
+    
+    return receipts
+      .filter(receipt => 
+        receipt.date.getMonth() === targetMonth && 
+        receipt.date.getFullYear() === targetYear
       )
-      .reduce(
-        (sum, event) => sum + (event.actualFoodCost || event.estimatedFoodCost),
-        0
-      );
+      .reduce((sum, receipt) => sum + receipt.total, 0);
   };
 
   const handleSaveEvent = () => {
     if (editingEvent) {
-      setEvents(
-        events.map((event) =>
-          event.id === editingEvent.id
-            ? {
-                ...newEvent,
-                id: editingEvent.id,
-                date: new Date(newEvent.date),
-              }
-            : event
-        )
-      );
+      setEvents(events.map(event => 
+        event.id === editingEvent.id 
+          ? { ...newEvent, id: editingEvent.id, date: new Date(newEvent.date) }
+          : event
+      ));
       setEditingEvent(null);
     } else {
       const event = {
@@ -141,22 +135,42 @@ const CateringSalesApp = () => {
         id: Date.now(),
         date: new Date(newEvent.date),
         estimatedRevenue: parseFloat(newEvent.estimatedRevenue) || 0,
-        estimatedCOGS: parseFloat(newEvent.estimatedCOGS) || 0,
+        estimatedFoodCost: parseFloat(newEvent.estimatedFoodCost) || 0,
+        estimatedLaborCost: parseFloat(newEvent.estimatedLaborCost) || 0,
         actualRevenue: 0,
-        actualCOGS: 0,
+        actualFoodCost: 0,
+        actualLaborCost: 0
       };
       setEvents([...events, event]);
     }
-
+    
     setShowEventModal(false);
     setNewEvent({
-      title: "",
+      title: '',
       date: new Date(),
-      estimatedRevenue: "",
-      estimatedCOGS: "",
-      status: "pending",
-      notes: "",
-      lists: [],
+      estimatedRevenue: '',
+      estimatedFoodCost: '',
+      estimatedLaborCost: '',
+      status: 'pending',
+      notes: '',
+      lists: []
+    });
+  };
+
+  const handleSaveReceipt = () => {
+    const receipt = {
+      ...newReceipt,
+      id: Date.now(),
+      total: parseFloat(newReceipt.total) || 0,
+      date: new Date(newReceipt.date)
+    };
+    setReceipts([...receipts, receipt]);
+    
+    setShowReceiptModal(false);
+    setNewReceipt({
+      store: '',
+      total: '',
+      date: new Date()
     });
   };
 
@@ -169,8 +183,8 @@ const CateringSalesApp = () => {
       estimatedFoodCost: event.estimatedFoodCost.toString(),
       estimatedLaborCost: event.estimatedLaborCost.toString(),
       status: event.status,
-      notes: event.notes || "",
-      lists: event.lists || [],
+      notes: event.notes || '',
+      lists: event.lists || []
     });
     setShowEventModal(true);
   };
@@ -179,27 +193,27 @@ const CateringSalesApp = () => {
     const today = new Date();
     const currentMonth = selectedDate.getMonth();
     const currentYear = selectedDate.getFullYear();
-
+    
     const firstDay = new Date(currentYear, currentMonth, 1);
     const lastDay = new Date(currentYear, currentMonth + 1, 0);
     const startDate = new Date(firstDay);
     startDate.setDate(startDate.getDate() - firstDay.getDay());
-
+    
     const days = [];
     const currentDate = new Date(startDate);
-
+    
     for (let i = 0; i < 42; i++) {
-      const dayEvents = events.filter(
-        (event) => event.date.toDateString() === currentDate.toDateString()
+      const dayEvents = events.filter(event => 
+        event.date.toDateString() === currentDate.toDateString()
       );
-
+      
       days.push({
         date: new Date(currentDate),
         isCurrentMonth: currentDate.getMonth() === currentMonth,
         isToday: currentDate.toDateString() === today.toDateString(),
-        events: dayEvents,
+        events: dayEvents
       });
-
+      
       currentDate.setDate(currentDate.getDate() + 1);
     }
 
@@ -207,21 +221,11 @@ const CateringSalesApp = () => {
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="p-4 border-b border-gray-200 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900">
-            {selectedDate.toLocaleDateString("en-US", {
-              month: "long",
-              year: "numeric",
-            })}
+            {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
           </h2>
           <div className="flex items-center space-x-2">
             <button
-              onClick={() =>
-                setSelectedDate(
-                  new Date(
-                    selectedDate.getFullYear(),
-                    selectedDate.getMonth() - 1
-                  )
-                )
-              }
+              onClick={() => setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth() - 1))}
               className="p-1 hover:bg-gray-100 rounded"
             >
               <ChevronLeft className="w-5 h-5" />
@@ -233,59 +237,42 @@ const CateringSalesApp = () => {
               Today
             </button>
             <button
-              onClick={() =>
-                setSelectedDate(
-                  new Date(
-                    selectedDate.getFullYear(),
-                    selectedDate.getMonth() + 1
-                  )
-                )
-              }
+              onClick={() => setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1))}
               className="p-1 hover:bg-gray-100 rounded"
             >
               <ChevronRight className="w-5 h-5" />
             </button>
           </div>
         </div>
-
+        
         <div className="grid grid-cols-7 gap-0 text-sm">
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-            <div
-              key={day}
-              className="p-3 text-center font-medium text-gray-500 border-b border-gray-100"
-            >
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+            <div key={day} className="p-3 text-center font-medium text-gray-500 border-b border-gray-100">
               {day}
             </div>
           ))}
-
+          
           {days.map((day, index) => (
             <div
               key={index}
               className={`min-h-24 p-2 border-b border-r border-gray-100 ${
-                !day.isCurrentMonth ? "bg-gray-50" : "bg-white hover:bg-gray-50"
-              } ${day.isToday ? "bg-blue-50" : ""}`}
+                !day.isCurrentMonth ? 'bg-gray-50' : 'bg-white hover:bg-gray-50'
+              } ${day.isToday ? 'bg-blue-50' : ''}`}
             >
-              <div
-                className={`text-sm ${
-                  !day.isCurrentMonth
-                    ? "text-gray-400"
-                    : day.isToday
-                    ? "text-blue-700 font-semibold"
-                    : "text-gray-900"
-                }`}
-              >
+              <div className={`text-sm ${
+                !day.isCurrentMonth ? 'text-gray-400' : 
+                day.isToday ? 'text-blue-700 font-semibold' : 'text-gray-900'
+              }`}>
                 {day.date.getDate()}
               </div>
-              {day.events.map((event) => (
+              {day.events.map(event => (
                 <div
                   key={event.id}
                   onClick={() => openEditModal(event)}
                   className={`mt-1 p-1 text-xs rounded cursor-pointer truncate ${
-                    event.status === "confirmed"
-                      ? "bg-green-100 text-green-800"
-                      : event.status === "pending"
-                      ? "bg-yellow-100 text-yellow-800"
-                      : "bg-gray-100 text-gray-800"
+                    event.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                    event.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-gray-100 text-gray-800'
                   }`}
                 >
                   {event.title}
@@ -298,22 +285,153 @@ const CateringSalesApp = () => {
     );
   };
 
+  const renderThreeMonthView = () => {
+    const months = [];
+    for (let i = -1; i <= 1; i++) {
+      const monthDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + i, 1);
+      months.push(monthDate);
+    }
+
+    return (
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-900">3 Month View</h2>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth() - 3))}
+              className="p-1 hover:bg-gray-100 rounded"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setSelectedDate(new Date())}
+              className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+            >
+              Today
+            </button>
+            <button
+              onClick={() => setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 3))}
+              className="p-1 hover:bg-gray-100 rounded"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
+          {months.map((month, index) => (
+            <div key={index} className="border border-gray-200 rounded">
+              <div className="p-2 bg-gray-50 font-medium text-sm text-center">
+                {month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              </div>
+              <div className="p-2">
+                {events
+                  .filter(event => 
+                    event.date.getMonth() === month.getMonth() && 
+                    event.date.getFullYear() === month.getFullYear()
+                  )
+                  .map(event => (
+                    <div
+                      key={event.id}
+                      onClick={() => openEditModal(event)}
+                      className={`mb-1 p-2 text-xs rounded cursor-pointer ${
+                        event.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                        event.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}
+                    >
+                      <div className="font-medium">{event.title}</div>
+                      <div>{event.date.getDate()}</div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderAnnualView = () => {
+    const year = selectedDate.getFullYear();
+    const months = [];
+    for (let i = 0; i < 12; i++) {
+      months.push(new Date(year, i, 1));
+    }
+
+    return (
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-900">{year} Annual View</h2>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setSelectedDate(new Date(year - 1, selectedDate.getMonth()))}
+              className="p-1 hover:bg-gray-100 rounded"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setSelectedDate(new Date())}
+              className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+            >
+              Current Year
+            </button>
+            <button
+              onClick={() => setSelectedDate(new Date(year + 1, selectedDate.getMonth()))}
+              className="p-1 hover:bg-gray-100 rounded"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4">
+          {months.map((month, index) => (
+            <div key={index} className="border border-gray-200 rounded">
+              <div className="p-2 bg-gray-50 font-medium text-sm text-center">
+                {month.toLocaleDateString('en-US', { month: 'long' })}
+              </div>
+              <div className="p-2">
+                {events
+                  .filter(event => 
+                    event.date.getMonth() === month.getMonth() && 
+                    event.date.getFullYear() === month.getFullYear()
+                  )
+                  .map(event => (
+                    <div
+                      key={event.id}
+                      onClick={() => openEditModal(event)}
+                      className={`mb-1 p-1 text-xs rounded cursor-pointer ${
+                        event.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                        event.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}
+                    >
+                      <div className="font-medium truncate">{event.title}</div>
+                      <div>{event.date.getDate()}</div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   const renderFinancials = () => {
-    const { totalFutureRevenue, totalFutureFoodCost, totalFutureLaborCost } =
-      getCurrentYearData();
+    const { totalFutureRevenue, totalFutureFoodCost, totalFutureLaborCost } = getCurrentYearData();
     const monthlySpending = getMonthlyFoodSpending();
     const totalFutureCOGS = totalFutureFoodCost + totalFutureLaborCost;
     const grossMargin = totalFutureRevenue - totalFutureCOGS;
-
+    
     return (
       <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">
-                  Future Revenue (This Year)
-                </p>
+                <p className="text-sm text-gray-600">Future Revenue (This Year)</p>
                 <p className="text-2xl font-semibold text-green-600">
                   {formatCurrency(totalFutureRevenue)}
                 </p>
@@ -321,7 +439,7 @@ const CateringSalesApp = () => {
               <TrendingUp className="w-8 h-8 text-green-500" />
             </div>
           </div>
-
+          
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
@@ -333,7 +451,7 @@ const CateringSalesApp = () => {
               <ShoppingCart className="w-8 h-8 text-red-500" />
             </div>
           </div>
-
+          
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
@@ -346,7 +464,7 @@ const CateringSalesApp = () => {
             </div>
           </div>
         </div>
-
+        
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
             <div className="flex items-center justify-between">
@@ -359,7 +477,7 @@ const CateringSalesApp = () => {
               <TrendingUp className="w-8 h-8 text-blue-500" />
             </div>
           </div>
-
+          
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -372,33 +490,16 @@ const CateringSalesApp = () => {
             </div>
             <div className="flex items-center space-x-2">
               <button
-                onClick={() =>
-                  setSelectedMonthForSpending(
-                    new Date(
-                      selectedMonthForSpending.getFullYear(),
-                      selectedMonthForSpending.getMonth() - 1
-                    )
-                  )
-                }
+                onClick={() => setSelectedMonthForSpending(new Date(selectedMonthForSpending.getFullYear(), selectedMonthForSpending.getMonth() - 1))}
                 className="p-1 hover:bg-gray-100 rounded"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <span className="text-sm font-medium text-gray-700 min-w-24 text-center">
-                {selectedMonthForSpending.toLocaleDateString("en-US", {
-                  month: "short",
-                  year: "numeric",
-                })}
+                {selectedMonthForSpending.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
               </span>
               <button
-                onClick={() =>
-                  setSelectedMonthForSpending(
-                    new Date(
-                      selectedMonthForSpending.getFullYear(),
-                      selectedMonthForSpending.getMonth() + 1
-                    )
-                  )
-                }
+                onClick={() => setSelectedMonthForSpending(new Date(selectedMonthForSpending.getFullYear(), selectedMonthForSpending.getMonth() + 1))}
                 className="p-1 hover:bg-gray-100 rounded"
               >
                 <ChevronRight className="w-4 h-4" />
@@ -409,26 +510,85 @@ const CateringSalesApp = () => {
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
           <div className="p-4 border-b border-gray-200">
+            <h3 className="text-lg font-semibold">Monthly Receipts</h3>
+            <div className="flex items-center space-x-2 mt-2">
+              <button
+                onClick={() => setSelectedMonthForSpending(new Date(selectedMonthForSpending.getFullYear(), selectedMonthForSpending.getMonth() - 1))}
+                className="p-1 hover:bg-gray-100 rounded"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-sm font-medium text-gray-700 min-w-24 text-center">
+                {selectedMonthForSpending.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              </span>
+              <button
+                onClick={() => setSelectedMonthForSpending(new Date(selectedMonthForSpending.getFullYear(), selectedMonthForSpending.getMonth() + 1))}
+                className="p-1 hover:bg-gray-100 rounded"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          <div className="p-4">
+            {receipts
+              .filter(receipt => 
+                receipt.date.getMonth() === selectedMonthForSpending.getMonth() && 
+                receipt.date.getFullYear() === selectedMonthForSpending.getFullYear()
+              )
+              .sort((a, b) => b.date - a.date)
+              .map(receipt => (
+                <div 
+                  key={receipt.id} 
+                  className="flex justify-between items-center py-3 border-b border-gray-100 last:border-b-0"
+                >
+                  <div>
+                    <p className="font-medium text-gray-900">{receipt.store}</p>
+                    <p className="text-sm text-gray-600">
+                      {receipt.date.toLocaleDateString('en-US', { 
+                        weekday: 'short', 
+                        month: 'short', 
+                        day: 'numeric' 
+                      })}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-medium text-red-600">
+                      {formatCurrency(receipt.total)}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            {receipts.filter(receipt => 
+              receipt.date.getMonth() === selectedMonthForSpending.getMonth() && 
+              receipt.date.getFullYear() === selectedMonthForSpending.getFullYear()
+            ).length === 0 && (
+              <p className="text-gray-500 text-center py-4">No receipts for this month</p>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          <div className="p-4 border-b border-gray-200">
             <h3 className="text-lg font-semibold">Upcoming Events</h3>
           </div>
           <div className="p-4">
             {events
-              .filter((event) => event.date >= new Date())
+              .filter(event => event.date >= new Date())
               .sort((a, b) => a.date - b.date)
               .slice(0, 5)
-              .map((event) => (
-                <div
-                  key={event.id}
+              .map(event => (
+                <div 
+                  key={event.id} 
                   className="flex justify-between items-center py-3 border-b border-gray-100 last:border-b-0 cursor-pointer hover:bg-gray-50 rounded px-2"
                   onClick={() => openEditModal(event)}
                 >
                   <div>
                     <p className="font-medium text-gray-900">{event.title}</p>
                     <p className="text-sm text-gray-600">
-                      {event.date.toLocaleDateString("en-US", {
-                        weekday: "short",
-                        month: "short",
-                        day: "numeric",
+                      {event.date.toLocaleDateString('en-US', { 
+                        weekday: 'short', 
+                        month: 'short', 
+                        day: 'numeric' 
                       })}
                     </p>
                   </div>
@@ -437,8 +597,7 @@ const CateringSalesApp = () => {
                       {formatCurrency(event.estimatedRevenue)}
                     </p>
                     <p className="text-sm text-gray-600">
-                      Food: {formatCurrency(event.estimatedFoodCost)} | Labor:{" "}
-                      {formatCurrency(event.estimatedLaborCost)}
+                      Food: {formatCurrency(event.estimatedFoodCost)} | Labor: {formatCurrency(event.estimatedLaborCost)}
                     </p>
                   </div>
                 </div>
@@ -454,49 +613,97 @@ const CateringSalesApp = () => {
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-gray-900">
-              Local Effort Calendar and Budget
-            </h1>
-            <button
-              onClick={() => setShowEventModal(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              <span>New Event</span>
-            </button>
+            <h1 className="text-2xl font-bold text-gray-900">Local Effort Calendar and Budget</h1>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => setShowReceiptModal(true)}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                <span>New Receipt</span>
+              </button>
+              <button
+                onClick={() => setShowEventModal(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                <span>New Event</span>
+              </button>
+            </div>
           </div>
-
+          
           <nav className="mt-4">
-            <div className="flex space-x-6">
-              <button
-                onClick={() => setActiveView("calendar")}
-                className={`pb-2 border-b-2 font-medium text-sm transition-colors ${
-                  activeView === "calendar"
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                <Calendar className="w-4 h-4 inline mr-2" />
-                Calendar
-              </button>
-              <button
-                onClick={() => setActiveView("financials")}
-                className={`pb-2 border-b-2 font-medium text-sm transition-colors ${
-                  activeView === "financials"
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                <DollarSign className="w-4 h-4 inline mr-2" />
-                Financials
-              </button>
+            <div className="flex justify-between">
+              <div className="flex space-x-6">
+                <button
+                  onClick={() => setActiveView('calendar')}
+                  className={`pb-2 border-b-2 font-medium text-sm transition-colors ${
+                    activeView === 'calendar' 
+                      ? 'border-blue-500 text-blue-600' 
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  <Calendar className="w-4 h-4 inline mr-2" />
+                  Calendar
+                </button>
+                <button
+                  onClick={() => setActiveView('financials')}
+                  className={`pb-2 border-b-2 font-medium text-sm transition-colors ${
+                    activeView === 'financials' 
+                      ? 'border-blue-500 text-blue-600' 
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  <DollarSign className="w-4 h-4 inline mr-2" />
+                  Financials
+                </button>
+              </div>
+              
+              {activeView === 'calendar' && (
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setCalendarView('monthly')}
+                    className={`px-3 py-1 text-sm rounded transition-colors ${
+                      calendarView === 'monthly' 
+                        ? 'bg-blue-100 text-blue-700' 
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Monthly
+                  </button>
+                  <button
+                    onClick={() => setCalendarView('3month')}
+                    className={`px-3 py-1 text-sm rounded transition-colors ${
+                      calendarView === '3month' 
+                        ? 'bg-blue-100 text-blue-700' 
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    3 Month
+                  </button>
+                  <button
+                    onClick={() => setCalendarView('annual')}
+                    className={`px-3 py-1 text-sm rounded transition-colors ${
+                      calendarView === 'annual' 
+                        ? 'bg-blue-100 text-blue-700' 
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Annual
+                  </button>
+                </div>
+              )}
             </div>
           </nav>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8">
-        {activeView === "calendar" ? renderCalendar() : renderFinancials()}
+        {activeView === 'calendar' ? (
+          calendarView === 'monthly' ? renderCalendar() :
+          calendarView === '3month' ? renderThreeMonthView() :
+          renderAnnualView()
+        ) : renderFinancials()}
       </main>
 
       {/* Event Modal */}
@@ -506,21 +713,21 @@ const CateringSalesApp = () => {
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold">
-                  {editingEvent ? "Edit Event" : "New Event"}
+                  {editingEvent ? 'Edit Event' : 'New Event'}
                 </h3>
                 <button
                   onClick={() => {
                     setShowEventModal(false);
                     setEditingEvent(null);
                     setNewEvent({
-                      title: "",
+                      title: '',
                       date: new Date(),
-                      estimatedRevenue: "",
-                      estimatedFoodCost: "",
-                      estimatedLaborCost: "",
-                      status: "pending",
-                      notes: "",
-                      lists: [],
+                      estimatedRevenue: '',
+                      estimatedFoodCost: '',
+                      estimatedLaborCost: '',
+                      status: 'pending',
+                      notes: '',
+                      lists: []
                     });
                   }}
                   className="text-gray-400 hover:text-gray-600"
@@ -537,9 +744,7 @@ const CateringSalesApp = () => {
                   <input
                     type="text"
                     value={newEvent.title}
-                    onChange={(e) =>
-                      setNewEvent({ ...newEvent, title: e.target.value })
-                    }
+                    onChange={(e) => setNewEvent({...newEvent, title: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter event title"
                   />
@@ -551,13 +756,8 @@ const CateringSalesApp = () => {
                   </label>
                   <input
                     type="date"
-                    value={newEvent.date.toISOString().split("T")[0]}
-                    onChange={(e) =>
-                      setNewEvent({
-                        ...newEvent,
-                        date: new Date(e.target.value),
-                      })
-                    }
+                    value={newEvent.date.toISOString().split('T')[0]}
+                    onChange={(e) => setNewEvent({...newEvent, date: new Date(e.target.value)})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
@@ -569,12 +769,7 @@ const CateringSalesApp = () => {
                   <input
                     type="number"
                     value={newEvent.estimatedRevenue}
-                    onChange={(e) =>
-                      setNewEvent({
-                        ...newEvent,
-                        estimatedRevenue: e.target.value,
-                      })
-                    }
+                    onChange={(e) => setNewEvent({...newEvent, estimatedRevenue: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="0.00"
                   />
@@ -588,12 +783,7 @@ const CateringSalesApp = () => {
                     <input
                       type="number"
                       value={newEvent.estimatedFoodCost}
-                      onChange={(e) =>
-                        setNewEvent({
-                          ...newEvent,
-                          estimatedFoodCost: e.target.value,
-                        })
-                      }
+                      onChange={(e) => setNewEvent({...newEvent, estimatedFoodCost: e.target.value})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="0.00"
                     />
@@ -605,12 +795,7 @@ const CateringSalesApp = () => {
                     <input
                       type="number"
                       value={newEvent.estimatedLaborCost}
-                      onChange={(e) =>
-                        setNewEvent({
-                          ...newEvent,
-                          estimatedLaborCost: e.target.value,
-                        })
-                      }
+                      onChange={(e) => setNewEvent({...newEvent, estimatedLaborCost: e.target.value})}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="0.00"
                     />
@@ -623,9 +808,7 @@ const CateringSalesApp = () => {
                   </label>
                   <select
                     value={newEvent.status}
-                    onChange={(e) =>
-                      setNewEvent({ ...newEvent, status: e.target.value })
-                    }
+                    onChange={(e) => setNewEvent({...newEvent, status: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="pending">Pending</option>
@@ -641,9 +824,7 @@ const CateringSalesApp = () => {
                   </label>
                   <textarea
                     value={newEvent.notes}
-                    onChange={(e) =>
-                      setNewEvent({ ...newEvent, notes: e.target.value })
-                    }
+                    onChange={(e) => setNewEvent({...newEvent, notes: e.target.value})}
                     rows="3"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Add any notes about this event..."
@@ -657,14 +838,14 @@ const CateringSalesApp = () => {
                     setShowEventModal(false);
                     setEditingEvent(null);
                     setNewEvent({
-                      title: "",
+                      title: '',
                       date: new Date(),
-                      estimatedRevenue: "",
-                      estimatedFoodCost: "",
-                      estimatedLaborCost: "",
-                      status: "pending",
-                      notes: "",
-                      lists: [],
+                      estimatedRevenue: '',
+                      estimatedFoodCost: '',
+                      estimatedLaborCost: '',
+                      status: 'pending',
+                      notes: '',
+                      lists: []
                     });
                   }}
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
@@ -677,6 +858,96 @@ const CateringSalesApp = () => {
                 >
                   <Save className="w-4 h-4 inline mr-2" />
                   Save Event
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Receipt Modal */}
+      {showReceiptModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">New Receipt</h3>
+                <button
+                  onClick={() => {
+                    setShowReceiptModal(false);
+                    setNewReceipt({
+                      store: '',
+                      total: '',
+                      date: new Date()
+                    });
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Store
+                  </label>
+                  <input
+                    type="text"
+                    value={newReceipt.store}
+                    onChange={(e) => setNewReceipt({...newReceipt, store: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    placeholder="Enter store name"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Total
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={newReceipt.total}
+                    onChange={(e) => setNewReceipt({...newReceipt, total: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Date
+                  </label>
+                  <input
+                    type="date"
+                    value={newReceipt.date.toISOString().split('T')[0]}
+                    onChange={(e) => setNewReceipt({...newReceipt, date: new Date(e.target.value)})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowReceiptModal(false);
+                    setNewReceipt({
+                      store: '',
+                      total: '',
+                      date: new Date()
+                    });
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveReceipt}
+                  className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-md transition-colors"
+                >
+                  <Save className="w-4 h-4 inline mr-2" />
+                  Save Receipt
                 </button>
               </div>
             </div>
