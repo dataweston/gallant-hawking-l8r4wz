@@ -71,7 +71,10 @@ const CateringSalesApp = () => {
     estimatedLaborCost: '',
     status: 'pending',
     notes: '',
-    lists: []
+    lists: [],
+    // Feature: Added state for repetition
+    repeat: 'none', // 'none', 'weekly', 'biweekly', 'monthly'
+    repeatUntil: new Date()
   });
 
   const [newReceipt, setNewReceipt] = useState({
@@ -121,8 +124,10 @@ const CateringSalesApp = () => {
       .reduce((sum, receipt) => sum + receipt.total, 0);
   };
 
+  // Feature: Updated handleSaveEvent to manage repetitions
   const handleSaveEvent = () => {
     if (editingEvent) {
+      // Logic for updating a single event remains the same
       setEvents(events.map(event => 
         event.id === editingEvent.id 
           ? { ...newEvent, id: editingEvent.id, date: new Date(newEvent.date) }
@@ -130,7 +135,9 @@ const CateringSalesApp = () => {
       ));
       setEditingEvent(null);
     } else {
-      const event = {
+      // Logic for creating new events, including repetitions
+      const newEventsList = [];
+      const baseEvent = {
         ...newEvent,
         id: Date.now(),
         date: new Date(newEvent.date),
@@ -141,7 +148,33 @@ const CateringSalesApp = () => {
         actualFoodCost: 0,
         actualLaborCost: 0
       };
-      setEvents([...events, event]);
+      
+      newEventsList.push(baseEvent);
+
+      if (newEvent.repeat !== 'none') {
+        let currentDate = new Date(baseEvent.date);
+        const endDate = new Date(newEvent.repeatUntil);
+
+        while (currentDate < endDate) {
+          if (newEvent.repeat === 'weekly') {
+            currentDate.setDate(currentDate.getDate() + 7);
+          } else if (newEvent.repeat === 'biweekly') {
+            currentDate.setDate(currentDate.getDate() + 14);
+          } else if (newEvent.repeat === 'monthly') {
+            currentDate.setMonth(currentDate.getMonth() + 1);
+          }
+
+          if (currentDate <= endDate) {
+            newEventsList.push({
+              ...baseEvent,
+              id: Date.now() + newEventsList.length,
+              date: new Date(currentDate)
+            });
+          }
+        }
+      }
+      
+      setEvents([...events, ...newEventsList]);
     }
     
     setShowEventModal(false);
@@ -153,7 +186,9 @@ const CateringSalesApp = () => {
       estimatedLaborCost: '',
       status: 'pending',
       notes: '',
-      lists: []
+      lists: [],
+      repeat: 'none',
+      repeatUntil: new Date()
     });
   };
 
@@ -184,7 +219,9 @@ const CateringSalesApp = () => {
       estimatedLaborCost: event.estimatedLaborCost.toString(),
       status: event.status,
       notes: event.notes || '',
-      lists: event.lists || []
+      lists: event.lists || [],
+      repeat: 'none',
+      repeatUntil: new Date()
     });
     setShowEventModal(true);
   };
@@ -727,7 +764,9 @@ const CateringSalesApp = () => {
                       estimatedLaborCost: '',
                       status: 'pending',
                       notes: '',
-                      lists: []
+                      lists: [],
+                      repeat: 'none',
+                      repeatUntil: new Date()
                     });
                   }}
                   className="text-gray-400 hover:text-gray-600"
@@ -817,6 +856,40 @@ const CateringSalesApp = () => {
                     <option value="cancelled">Cancelled</option>
                   </select>
                 </div>
+                
+                {/* Feature: Added UI for repetition, only shows for new events */}
+                {!editingEvent && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Repeat
+                      </label>
+                      <select
+                        value={newEvent.repeat}
+                        onChange={(e) => setNewEvent({ ...newEvent, repeat: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="none">None</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="biweekly">Bi-weekly</option>
+                        <option value="monthly">Monthly</option>
+                      </select>
+                    </div>
+                    {newEvent.repeat !== 'none' && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Repeat Until
+                        </label>
+                        <input
+                          type="date"
+                          value={newEvent.repeatUntil.toISOString().split('T')[0]}
+                          onChange={(e) => setNewEvent({ ...newEvent, repeatUntil: new Date(e.target.value) })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -845,7 +918,9 @@ const CateringSalesApp = () => {
                       estimatedLaborCost: '',
                       status: 'pending',
                       notes: '',
-                      lists: []
+                      lists: [],
+                      repeat: 'none',
+                      repeatUntil: new Date()
                     });
                   }}
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
