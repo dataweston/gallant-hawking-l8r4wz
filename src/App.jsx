@@ -10,6 +10,9 @@ const CateringSalesApp = () => {
   // The state will now start empty and be populated from Firestore
   const [events, setEvents] = useState([]);
   const [receipts, setReceipts] = useState([]);
+  const [showReceipts, setShowReceipts] = useState(false);
+  const [receiptsDate, setReceiptsDate] = useState(new Date());
+  const [groupReceiptsBy, setGroupReceiptsBy] = useState('none');
   
   // All other state remains the same
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -123,8 +126,39 @@ const CateringSalesApp = () => {
       await updateDoc(eventDoc, eventData);
       setEditingEvent(null);
     } else {
-      await addDoc(collection(db, 'events'), eventData);
-    }
+        await addDoc(collection(db, 'events'), eventData);
+  
+        if (newEvent.repeat !== 'none') {
+          let currentDate = new Date(newEvent.date);
+          const repeatUntilDate = new Date(newEvent.repeatUntil);
+  
+          const addDays = (date, days) => {
+            const result = new Date(date);
+            result.setDate(result.getDate() + days);
+            return result;
+          };
+  
+          const addMonths = (date, months) => {
+            const result = new Date(date);
+            result.setMonth(result.getMonth() + months);
+            return result;
+          }
+  
+          while (currentDate < repeatUntilDate) {
+            if (newEvent.repeat === 'weekly') {
+              currentDate = addDays(currentDate, 7);
+            } else if (newEvent.repeat === 'biweekly') {
+              currentDate = addDays(currentDate, 14);
+            } else if (newEvent.repeat === 'monthly') {
+              currentDate = addMonths(currentDate, 1);
+            }
+  
+            if (currentDate <= repeatUntilDate) {
+              await addDoc(collection(db, 'events'), { ...eventData, date: currentDate });
+            }
+          }
+        }
+      }
 
     setShowEventModal(false);
     setNewEvent({
@@ -395,7 +429,7 @@ const CateringSalesApp = () => {
       </div>
     );
   };
-
+  
   const renderFinancials = () => {
     const { totalFutureRevenue, totalFutureFoodCost, totalFutureLaborCost } = getCurrentYearData();
     const monthlySpending = getMonthlyFoodSpending();
@@ -484,63 +518,17 @@ const CateringSalesApp = () => {
             </div>
           </div>
         </div>
-
+        
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-          <div className="p-4 border-b border-gray-200">
-            <h3 className="text-lg font-semibold">Monthly Receipts</h3>
-            <div className="flex items-center space-x-2 mt-2">
-              <button
-                onClick={() => setSelectedMonthForSpending(new Date(selectedMonthForSpending.getFullYear(), selectedMonthForSpending.getMonth() - 1))}
-                className="p-1 hover:bg-gray-100 rounded"
+          <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+            <h3 className="text-lg font-semibold">Receipts</h3>
+            <button
+                onClick={() => setShowReceipts(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
               >
-                <ChevronLeft className="w-4 h-4" />
+                <Calendar className="w-4 h-4" />
+                <span>View Receipts</span>
               </button>
-              <span className="text-sm font-medium text-gray-700 min-w-24 text-center">
-                {selectedMonthForSpending.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-              </span>
-              <button
-                onClick={() => setSelectedMonthForSpending(new Date(selectedMonthForSpending.getFullYear(), selectedMonthForSpending.getMonth() + 1))}
-                className="p-1 hover:bg-gray-100 rounded"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-          <div className="p-4">
-            {receipts
-              .filter(receipt => 
-                receipt.date.getMonth() === selectedMonthForSpending.getMonth() && 
-                receipt.date.getFullYear() === selectedMonthForSpending.getFullYear()
-              )
-              .sort((a, b) => b.date - a.date)
-              .map(receipt => (
-                <div 
-                  key={receipt.id} 
-                  className="flex justify-between items-center py-3 border-b border-gray-100 last:border-b-0"
-                >
-                  <div>
-                    <p className="font-medium text-gray-900">{receipt.store}</p>
-                    <p className="text-sm text-gray-600">
-                      {receipt.date.toLocaleDateString('en-US', { 
-                        weekday: 'short', 
-                        month: 'short', 
-                        day: 'numeric' 
-                      })}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-medium text-red-600">
-                      {formatCurrency(receipt.total)}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            {receipts.filter(receipt => 
-              receipt.date.getMonth() === selectedMonthForSpending.getMonth() && 
-              receipt.date.getFullYear() === selectedMonthForSpending.getFullYear()
-            ).length === 0 && (
-              <p className="text-gray-500 text-center py-4">No receipts for this month</p>
-            )}
           </div>
         </div>
 
@@ -584,13 +572,104 @@ const CateringSalesApp = () => {
       </div>
     );
   };
+  
+  const renderReceipts = () => {
+    const monthReceipts = receipts
+    .filter(receipt => 
+      receipt.date.getMonth() === receiptsDate.getMonth() && 
+      receipt.date.getFullYear() === receiptsDate.getFullYear()
+    )
+    .sort((a, b) => b.date - a.date);
+
+    const groupedReceipts = monthReceipts.reduce((acc, receipt) => {
+        const key = groupReceiptsBy === 'vendor' ? receipt.store : receipt.id;
+        if (!acc[key]) {
+            acc[key] = [];
+        }
+        acc[key].push(receipt);
+        return acc;
+    }, {});
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-screen overflow-y-auto">
+          <div className="p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Monthly Receipts</h3>
+              <button
+                onClick={() => {
+                    setShowReceipts(false);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex items-center space-x-2 mt-2">
+                <button
+                    onClick={() => setReceiptsDate(new Date(receiptsDate.getFullYear(), receiptsDate.getMonth() - 1))}
+                    className="p-1 hover:bg-gray-100 rounded"
+                >
+                    <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="text-sm font-medium text-gray-700 min-w-24 text-center">
+                    {receiptsDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                </span>
+                <button
+                    onClick={() => setReceiptsDate(new Date(receiptsDate.getFullYear(), receiptsDate.getMonth() + 1))}
+                    className="p-1 hover:bg-gray-100 rounded"
+                >
+                    <ChevronRight className="w-4 h-4" />
+                </button>
+                <select onChange={(e) => setGroupReceiptsBy(e.target.value)} value={groupReceiptsBy} className="ml-auto text-sm rounded border-gray-300">
+                    <option value="none">Group by None</option>
+                    <option value="vendor">Group by Vendor</option>
+                </select>
+            </div>
+            <div className="p-4">
+                {Object.keys(groupedReceipts).map(key => (
+                    <div key={key}>
+                        {groupReceiptsBy === 'vendor' && <h4 className="font-bold mt-4 mb-2">{key}</h4>}
+                        {groupedReceipts[key].map(receipt => (
+                            <div 
+                                key={receipt.id} 
+                                className="flex justify-between items-center py-3 border-b border-gray-100 last:border-b-0"
+                            >
+                                <div>
+                                    <p className="font-medium text-gray-900">{receipt.store}</p>
+                                    <p className="text-sm text-gray-600">
+                                    {receipt.date.toLocaleDateString('en-US', { 
+                                        weekday: 'short', 
+                                        month: 'short', 
+                                        day: 'numeric' 
+                                    })}
+                                    </p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="font-medium text-red-600">
+                                    {formatCurrency(receipt.total)}
+                                    </p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ))}
+                {monthReceipts.length === 0 && (
+                <p className="text-gray-500 text-center py-4">No receipts for this month</p>
+                )}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-gray-900">Local Effort Calendar and Budget</h1>
+        <div className="flex flex-col sm:flex-row justify-between items-center">
+            <h1 className="text-2xl font-bold text-gray-900 mb-4 sm:mb-0">Local Effort Calendar and Budget</h1>
             <div className="flex items-center space-x-3">
               <button
                 onClick={() => setShowReceiptModal(true)}
@@ -614,8 +693,8 @@ const CateringSalesApp = () => {
           </div>
           
           <nav className="mt-4">
-            <div className="flex justify-between">
-              <div className="flex space-x-6">
+          <div className="flex flex-col sm:flex-row justify-between">
+              <div className="flex space-x-6 mb-4 sm:mb-0">
                 <button
                   onClick={() => setActiveView('calendar')}
                   className={`pb-2 border-b-2 font-medium text-sm transition-colors ${
@@ -911,7 +990,7 @@ const CateringSalesApp = () => {
                     type="number"
                     step="0.01"
                     value={newReceipt.total}
-                    onChange={(e) => setNewReceipt({...newReceipt, total: e.target.value})}
+                    onChange={(e) => setNewReceipt({...newReceipt, total: e.target..value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500"
                     placeholder="0.00"
                   />
@@ -951,6 +1030,7 @@ const CateringSalesApp = () => {
           </div>
         </div>
       )}
+      {showReceipts && renderReceipts()}
     </div>
   );
 };
