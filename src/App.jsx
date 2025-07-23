@@ -990,7 +990,7 @@ const CateringSalesApp = () => {
                     type="number"
                     step="0.01"
                     value={newReceipt.total}
-                    onChange={(e) => setNewReceipt({...newReceipt, total: e.target..value})}
+                    onChange={(e) => setNewReceipt({...newReceipt, total: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500"
                     placeholder="0.00"
                   />
