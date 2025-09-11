@@ -22,6 +22,9 @@ const CateringSalesApp = () => {
   const [activeView, setActiveView] = useState('calendar');
   const [calendarView, setCalendarView] = useState('monthly'); // monthly, 3month, annual
   const [selectedMonthForSpending, setSelectedMonthForSpending] = useState(new Date());
+  // Delete confirmation modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   // --- DATA FETCHING from FIRESTORE ---
   useEffect(() => {
@@ -173,30 +176,37 @@ const CateringSalesApp = () => {
   };
   
   const handleDeleteEvent = async (event) => {
-    // If the event is part of a series, prompt to delete one or all
+    // If the event is part of a series, open the two-button confirm modal
     if (event.seriesId) {
-      const choice = window.prompt('Delete options: type "one" to delete this occurrence or "all" to delete the entire series.', 'one');
-      if (!choice) return;
-      const normalized = choice.trim().toLowerCase();
-      if (normalized === 'all') {
-        // delete all events in the same series
-        const q = query(collection(db, 'events'), where('seriesId', '==', event.seriesId));
-        const snap = await getDocs(q);
-        const deletions = snap.docs.map(d => deleteDoc(doc(db, 'events', d.id)));
-        await Promise.all(deletions);
-      } else if (normalized === 'one') {
-        await deleteDoc(doc(db, 'events', event.id));
-      } else {
-        // cancel if unrecognized input
-        return;
-      }
-    } else {
-      if (window.confirm('Delete this event?')) {
-        await deleteDoc(doc(db, 'events', event.id));
-      } else {
-        return;
-      }
+      setDeleteTarget(event);
+      setShowDeleteModal(true);
+      return;
     }
+    // Non-series: simple confirm
+    if (window.confirm('Delete this event?')) {
+      await deleteDoc(doc(db, 'events', event.id));
+      setShowEventModal(false);
+      setEditingEvent(null);
+    }
+  };
+
+  const deleteThisOccurrence = async () => {
+    if (!deleteTarget) return;
+    await deleteDoc(doc(db, 'events', deleteTarget.id));
+    setShowDeleteModal(false);
+    setDeleteTarget(null);
+    setShowEventModal(false);
+    setEditingEvent(null);
+  };
+
+  const deleteEntireSeries = async () => {
+    if (!deleteTarget || !deleteTarget.seriesId) return;
+    const q = query(collection(db, 'events'), where('seriesId', '==', deleteTarget.seriesId));
+    const snap = await getDocs(q);
+    const deletions = snap.docs.map(d => deleteDoc(doc(db, 'events', d.id)));
+    await Promise.all(deletions);
+    setShowDeleteModal(false);
+    setDeleteTarget(null);
     setShowEventModal(false);
     setEditingEvent(null);
   };
@@ -969,6 +979,48 @@ const CateringSalesApp = () => {
                     Save Event
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal for recurring events */}
+      {showDeleteModal && deleteTarget && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="text-lg font-semibold">Delete recurring event?</h3>
+                <button
+                  onClick={() => { setShowDeleteModal(false); setDeleteTarget(null); }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-sm text-gray-700 mb-4">
+                {`Would you like to delete just this occurrence${deleteTarget.date ? ` (${deleteTarget.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })})` : ''} or the entire series?`}
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-end">
+                <button
+                  onClick={deleteThisOccurrence}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md"
+                >
+                  Delete this occurrence
+                </button>
+                <button
+                  onClick={deleteEntireSeries}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md"
+                >
+                  Delete entire series
+                </button>
+                <button
+                  onClick={() => { setShowDeleteModal(false); setDeleteTarget(null); }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
+                >
+                  Cancel
+                </button>
               </div>
             </div>
           </div>
