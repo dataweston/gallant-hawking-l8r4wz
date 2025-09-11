@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Calendar, Plus, DollarSign, TrendingUp, ShoppingCart, Save, X, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 
 // Import firestore functions and the db instance we created
-import { db } from './firebase';
+import { db, auth, signInWithGoogle, signOutUser } from './firebase';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs } from 'firebase/firestore';
 
 
@@ -25,6 +25,7 @@ const CateringSalesApp = () => {
   // Delete confirmation modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [user, setUser] = useState(null);
 
   // --- DATA FETCHING from FIRESTORE ---
   useEffect(() => {
@@ -38,6 +39,13 @@ const CateringSalesApp = () => {
       setEvents(eventsData);
     });
     return () => unsubscribe();
+  }, []);
+
+  // Track auth state (optional; enables write access when security rules require auth)
+  useEffect(() => {
+    if (!auth) return;
+    const unsub = auth.onAuthStateChanged((u) => setUser(u));
+    return () => unsub && unsub();
   }, []);
 
   useEffect(() => {
@@ -182,33 +190,59 @@ const CateringSalesApp = () => {
       setShowDeleteModal(true);
       return;
     }
-    // Non-series: simple confirm
-    if (window.confirm('Delete this event?')) {
-      await deleteDoc(doc(db, 'events', event.id));
-      setShowEventModal(false);
-      setEditingEvent(null);
-    }
+  // Non-series: show modal as well (for consistency)
+  setDeleteTarget(event);
+  setShowDeleteModal(true);
   };
 
   const deleteThisOccurrence = async () => {
     if (!deleteTarget) return;
-    await deleteDoc(doc(db, 'events', deleteTarget.id));
-    setShowDeleteModal(false);
-    setDeleteTarget(null);
-    setShowEventModal(false);
-    setEditingEvent(null);
+    try {
+      await deleteDoc(doc(db, 'events', deleteTarget.id));
+      setShowDeleteModal(false);
+      setDeleteTarget(null);
+      setShowEventModal(false);
+      setEditingEvent(null);
+    } catch (e) {
+      alert(`Failed to delete: ${e && (e.message || e.code || e)}`);
+    }
   };
 
   const deleteEntireSeries = async () => {
     if (!deleteTarget || !deleteTarget.seriesId) return;
-    const q = query(collection(db, 'events'), where('seriesId', '==', deleteTarget.seriesId));
-    const snap = await getDocs(q);
-    const deletions = snap.docs.map(d => deleteDoc(doc(db, 'events', d.id)));
-    await Promise.all(deletions);
-    setShowDeleteModal(false);
-    setDeleteTarget(null);
-    setShowEventModal(false);
-    setEditingEvent(null);
+    try {
+      const q = query(collection(db, 'events'), where('seriesId', '==', deleteTarget.seriesId));
+      const snap = await getDocs(q);
+      const deletions = snap.docs.map(d => deleteDoc(doc(db, 'events', d.id)));
+      await Promise.all(deletions);
+      setShowDeleteModal(false);
+      setDeleteTarget(null);
+      setShowEventModal(false);
+      setEditingEvent(null);
+    } catch (e) {
+      alert(`Failed to delete series: ${e && (e.message || e.code || e)}`);
+    }
+  };
+
+  // Optional fallback: best-effort series delete when older events lack seriesId
+  const deleteBestEffortSeries = async () => {
+    if (!deleteTarget) return;
+    try {
+      // Match by same title and repeat cadence within +/- 2 days across future months
+      const baseTitle = deleteTarget.title || '';
+      const baseDate = deleteTarget.date instanceof Date ? deleteTarget.date : new Date(deleteTarget.date);
+      const isSameDay = (d1, d2) => Math.abs((new Date(d1) - new Date(d2)) / (1000 * 60 * 60 * 24)) <= 2;
+      const sameTitle = (t) => (t || '').trim().toLowerCase() === baseTitle.trim().toLowerCase();
+      const candidates = events.filter(ev => ev.id !== deleteTarget.id && sameTitle(ev.title) && isSameDay(ev.date.getDate(), baseDate.getDate()));
+      const deletions = [deleteTarget, ...candidates].map(ev => deleteDoc(doc(db, 'events', ev.id)));
+      await Promise.allSettled(deletions);
+      setShowDeleteModal(false);
+      setDeleteTarget(null);
+      setShowEventModal(false);
+      setEditingEvent(null);
+    } catch (e) {
+      alert(`Failed to delete related events: ${e && (e.message || e.code || e)}`);
+    }
   };
 
   const handleSaveReceipt = async () => {
@@ -723,6 +757,13 @@ const CateringSalesApp = () => {
                 <Plus className="w-4 h-4" />
                 <span>New Event</span>
               </button>
+              {auth && (
+                user ? (
+                  <button onClick={signOutUser} className="text-sm text-gray-600 hover:text-gray-900">Sign out</button>
+                ) : (
+                  <button onClick={signInWithGoogle} className="text-sm text-gray-600 hover:text-gray-900">Sign in</button>
+                )
+              )}
             </div>
           </div>
           
@@ -987,7 +1028,7 @@ const CateringSalesApp = () => {
 
       {/* Delete Confirmation Modal for recurring events */}
       {showDeleteModal && deleteTarget && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4" style={{ zIndex: 1000 }}>
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
             <div className="p-6">
               <div className="flex justify-between items-center mb-2">
@@ -1009,12 +1050,21 @@ const CateringSalesApp = () => {
                 >
                   Delete this occurrence
                 </button>
-                <button
-                  onClick={deleteEntireSeries}
-                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md"
-                >
-                  Delete entire series
-                </button>
+                {deleteTarget.seriesId ? (
+                  <button
+                    onClick={deleteEntireSeries}
+                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md"
+                  >
+                    Delete entire series
+                  </button>
+                ) : (
+                  <button
+                    onClick={deleteBestEffortSeries}
+                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md"
+                  >
+                    Delete matching series
+                  </button>
+                )}
                 <button
                   onClick={() => { setShowDeleteModal(false); setDeleteTarget(null); }}
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
