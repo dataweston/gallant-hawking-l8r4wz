@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Plus, DollarSign, TrendingUp, ShoppingCart, Edit3, Save, X, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { Calendar, Plus, DollarSign, TrendingUp, ShoppingCart, Save, X, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 
 // Import firestore functions and the db instance we created
 import { db } from './firebase';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs } from 'firebase/firestore';
 
 
 const CateringSalesApp = () => {
@@ -111,14 +111,14 @@ const CateringSalesApp = () => {
 
   // --- DATA MODIFICATION with FIRESTORE ---
   const handleSaveEvent = async () => {
-    const eventData = {
+  const eventData = {
         ...newEvent,
         estimatedRevenue: parseFloat(newEvent.estimatedRevenue) || 0,
         estimatedFoodCost: parseFloat(newEvent.estimatedFoodCost) || 0,
         estimatedLaborCost: parseFloat(newEvent.estimatedLaborCost) || 0,
         actualRevenue: newEvent.actualRevenue || 0,
         actualFoodCost: newEvent.actualFoodCost || 0,
-        actualLaborCost: newEvent.actualLaborCost || 0,
+    actualLaborCost: newEvent.actualLaborCost || 0,
     };
     
     if (editingEvent) {
@@ -126,7 +126,11 @@ const CateringSalesApp = () => {
       await updateDoc(eventDoc, eventData);
       setEditingEvent(null);
     } else {
-        await addDoc(collection(db, 'events'), eventData);
+    // seriesId is used to link repeated events together for bulk delete
+    const seriesId = newEvent.repeat !== 'none' ? (newEvent.seriesId || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`) : undefined;
+
+    const baseData = seriesId ? { ...eventData, seriesId } : eventData;
+    await addDoc(collection(db, 'events'), baseData);
   
         if (newEvent.repeat !== 'none') {
           let currentDate = new Date(newEvent.date);
@@ -154,7 +158,7 @@ const CateringSalesApp = () => {
             }
   
             if (currentDate <= repeatUntilDate) {
-              await addDoc(collection(db, 'events'), { ...eventData, date: currentDate });
+              await addDoc(collection(db, 'events'), { ...baseData, date: currentDate });
             }
           }
         }
@@ -168,13 +172,33 @@ const CateringSalesApp = () => {
     });
   };
   
-  const handleDeleteEvent = async (eventId) => {
-    if (window.confirm('Are you sure you want to delete this event?')) {
-      const eventDoc = doc(db, 'events', eventId);
-      await deleteDoc(eventDoc);
-      setShowEventModal(false);
-      setEditingEvent(null);
+  const handleDeleteEvent = async (event) => {
+    // If the event is part of a series, prompt to delete one or all
+    if (event.seriesId) {
+      const choice = window.prompt('Delete options: type "one" to delete this occurrence or "all" to delete the entire series.', 'one');
+      if (!choice) return;
+      const normalized = choice.trim().toLowerCase();
+      if (normalized === 'all') {
+        // delete all events in the same series
+        const q = query(collection(db, 'events'), where('seriesId', '==', event.seriesId));
+        const snap = await getDocs(q);
+        const deletions = snap.docs.map(d => deleteDoc(doc(db, 'events', d.id)));
+        await Promise.all(deletions);
+      } else if (normalized === 'one') {
+        await deleteDoc(doc(db, 'events', event.id));
+      } else {
+        // cancel if unrecognized input
+        return;
+      }
+    } else {
+      if (window.confirm('Delete this event?')) {
+        await deleteDoc(doc(db, 'events', event.id));
+      } else {
+        return;
+      }
     }
+    setShowEventModal(false);
+    setEditingEvent(null);
   };
 
   const handleSaveReceipt = async () => {
@@ -919,7 +943,7 @@ const CateringSalesApp = () => {
                 <div>
                   {editingEvent && (
                     <button
-                      onClick={() => handleDeleteEvent(editingEvent.id)}
+                      onClick={() => handleDeleteEvent(editingEvent)}
                       className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors flex items-center"
                     >
                       <Trash2 className="w-4 h-4 inline mr-2" />
