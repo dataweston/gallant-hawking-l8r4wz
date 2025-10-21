@@ -1,64 +1,72 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Plus, DollarSign, TrendingUp, ShoppingCart, Save, X, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 
-// Import firestore functions and the db instance we created
-import { db, auth, signInWithGoogle, signOutUser } from './firebase';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs } from 'firebase/firestore';
-
+const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:3000' : '';
 
 const CateringSalesApp = () => {
-  // The state will now start empty and be populated from Firestore
   const [events, setEvents] = useState([]);
   const [receipts, setReceipts] = useState([]);
   const [showReceipts, setShowReceipts] = useState(false);
   const [receiptsDate, setReceiptsDate] = useState(new Date());
   const [groupReceiptsBy, setGroupReceiptsBy] = useState('none');
   
-  // All other state remains the same
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showEventModal, setShowEventModal] = useState(false);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
   const [activeView, setActiveView] = useState('calendar');
-  const [calendarView, setCalendarView] = useState('monthly'); // monthly, 3month, annual
+  const [calendarView, setCalendarView] = useState('monthly');
   const [selectedMonthForSpending, setSelectedMonthForSpending] = useState(new Date());
-  // Delete confirmation modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [user, setUser] = useState(null);
 
-  // --- DATA FETCHING from FIRESTORE ---
+  // Load events from Supabase API
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'events'), (snapshot) => {
-      const eventsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        date: doc.data().date ? doc.data().date.toDate() : new Date(),
-        repeatUntil: doc.data().repeatUntil ? doc.data().repeatUntil.toDate() : new Date()
+    loadEvents();
+    const interval = setInterval(loadEvents, 30000); // Refresh every 30s
+    return () => clearInterval(interval);
+  }, []);
+
+  // Load receipts from Supabase API
+  useEffect(() => {
+    loadReceipts();
+    const interval = setInterval(loadReceipts, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const loadEvents = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/calendar/events`);
+      const data = await res.json();
+      const eventsData = (Array.isArray(data) ? data : []).map(e => ({
+        ...e,
+        date: new Date(e.start_date),
+        estimatedRevenue: e.estimated_revenue || 0,
+        estimatedFoodCost: e.estimated_food_cost || 0,
+        estimatedLaborCost: e.estimated_labor_cost || 0,
+        actualRevenue: e.actual_revenue || 0,
+        actualFoodCost: e.actual_food_cost || 0,
+        actualLaborCost: e.actual_labor_cost || 0
       }));
       setEvents(eventsData);
-    });
-    return () => unsubscribe();
-  }, []);
+    } catch (err) {
+      console.error('Failed to load events:', err);
+    }
+  };
 
-  // Track auth state (optional; enables write access when security rules require auth)
-  useEffect(() => {
-    if (!auth) return;
-    const unsub = auth.onAuthStateChanged((u) => setUser(u));
-    return () => unsub && unsub();
-  }, []);
-
-  useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'receipts'), (snapshot) => {
-      const receiptsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        date: doc.data().date ? doc.data().date.toDate() : new Date(),
+  const loadReceipts = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/calendar/receipts`);
+      const data = await res.json();
+      const receiptsData = (Array.isArray(data) ? data : []).map(r => ({
+        ...r,
+        date: new Date(r.date)
       }));
       setReceipts(receiptsData);
-    });
-    return () => unsubscribe();
-  }, []);
+    } catch (err) {
+      console.error('Failed to load receipts:', err);
+    }
+  };
 
   const [newEvent, setNewEvent] = useState({
     title: '',
@@ -120,140 +128,134 @@ const CateringSalesApp = () => {
       .reduce((sum, receipt) => sum + receipt.total, 0);
   };
 
-  // --- DATA MODIFICATION with FIRESTORE ---
+  // Save event via Supabase API
   const handleSaveEvent = async () => {
-  const eventData = {
-        ...newEvent,
-        estimatedRevenue: parseFloat(newEvent.estimatedRevenue) || 0,
-        estimatedFoodCost: parseFloat(newEvent.estimatedFoodCost) || 0,
-        estimatedLaborCost: parseFloat(newEvent.estimatedLaborCost) || 0,
-        actualRevenue: newEvent.actualRevenue || 0,
-        actualFoodCost: newEvent.actualFoodCost || 0,
-    actualLaborCost: newEvent.actualLaborCost || 0,
+    const eventData = {
+      title: newEvent.title,
+      start_date: newEvent.date.toISOString().split('T')[0],
+      event_type: 'other',
+      visibility: 'private',
+      status: newEvent.status || 'scheduled',
+      estimated_revenue: parseFloat(newEvent.estimatedRevenue) || 0,
+      estimated_food_cost: parseFloat(newEvent.estimatedFoodCost) || 0,
+      estimated_labor_cost: parseFloat(newEvent.estimatedLaborCost) || 0,
+      actual_revenue: newEvent.actualRevenue || 0,
+      actual_food_cost: newEvent.actualFoodCost || 0,
+      actual_labor_cost: newEvent.actualLaborCost || 0,
+      notes: newEvent.notes || '',
+      repeat: newEvent.repeat,
+      repeatUntil: newEvent.repeat !== 'none' ? newEvent.repeatUntil.toISOString().split('T')[0] : undefined
     };
     
-    if (editingEvent) {
-      const eventDoc = doc(db, 'events', editingEvent.id);
-      await updateDoc(eventDoc, eventData);
-      setEditingEvent(null);
-    } else {
-    // seriesId is used to link repeated events together for bulk delete
-    const seriesId = newEvent.repeat !== 'none' ? (newEvent.seriesId || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`) : undefined;
-
-    const baseData = seriesId ? { ...eventData, seriesId } : eventData;
-    await addDoc(collection(db, 'events'), baseData);
-  
-        if (newEvent.repeat !== 'none') {
-          let currentDate = new Date(newEvent.date);
-          const repeatUntilDate = new Date(newEvent.repeatUntil);
-  
-          const addDays = (date, days) => {
-            const result = new Date(date);
-            result.setDate(result.getDate() + days);
-            return result;
-          };
-  
-          const addMonths = (date, months) => {
-            const result = new Date(date);
-            result.setMonth(result.getMonth() + months);
-            return result;
-          }
-  
-          while (currentDate < repeatUntilDate) {
-            if (newEvent.repeat === 'weekly') {
-              currentDate = addDays(currentDate, 7);
-            } else if (newEvent.repeat === 'biweekly') {
-              currentDate = addDays(currentDate, 14);
-            } else if (newEvent.repeat === 'monthly') {
-              currentDate = addMonths(currentDate, 1);
-            }
-  
-            if (currentDate <= repeatUntilDate) {
-              await addDoc(collection(db, 'events'), { ...baseData, date: currentDate });
-            }
-          }
-        }
+    try {
+      if (editingEvent) {
+        await fetch(`${API_BASE}/api/calendar/events?id=${editingEvent.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(eventData)
+        });
+        setEditingEvent(null);
+      } else {
+        await fetch(`${API_BASE}/api/calendar/events`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(eventData)
+        });
       }
-
-    setShowEventModal(false);
-    setNewEvent({
-      title: '', date: new Date(), estimatedRevenue: '', estimatedFoodCost: '',
-      estimatedLaborCost: '', status: 'pending', notes: '', lists: [],
-      repeat: 'none', repeatUntil: new Date()
-    });
+      
+      setShowEventModal(false);
+      setNewEvent({
+        title: '', date: new Date(), estimatedRevenue: '', estimatedFoodCost: '',
+        estimatedLaborCost: '', status: 'pending', notes: '', lists: [],
+        repeat: 'none', repeatUntil: new Date()
+      });
+      
+      await loadEvents();
+    } catch (e) {
+      alert(`Failed to save: ${e.message}`);
+    }
   };
   
   const handleDeleteEvent = async (event) => {
-    // If the event is part of a series, open the two-button confirm modal
-    if (event.seriesId) {
+    if (event.series_id) {
       setDeleteTarget(event);
       setShowDeleteModal(true);
       return;
     }
-  // Non-series: show modal as well (for consistency)
-  setDeleteTarget(event);
-  setShowDeleteModal(true);
+    setDeleteTarget(event);
+    setShowDeleteModal(true);
   };
 
   const deleteThisOccurrence = async () => {
     if (!deleteTarget) return;
     try {
-      await deleteDoc(doc(db, 'events', deleteTarget.id));
+      await fetch(`${API_BASE}/api/calendar/events?id=${deleteTarget.id}`, { method: 'DELETE' });
       setShowDeleteModal(false);
       setDeleteTarget(null);
       setShowEventModal(false);
       setEditingEvent(null);
+      await loadEvents();
     } catch (e) {
-      alert(`Failed to delete: ${e && (e.message || e.code || e)}`);
+      alert(`Failed to delete: ${e.message}`);
     }
   };
 
   const deleteEntireSeries = async () => {
-    if (!deleteTarget || !deleteTarget.seriesId) return;
+    if (!deleteTarget || !deleteTarget.series_id) return;
     try {
-      const q = query(collection(db, 'events'), where('seriesId', '==', deleteTarget.seriesId));
-      const snap = await getDocs(q);
-      const deletions = snap.docs.map(d => deleteDoc(doc(db, 'events', d.id)));
-      await Promise.all(deletions);
+      await fetch(`${API_BASE}/api/calendar/events?id=${deleteTarget.id}&series=true`, { method: 'DELETE' });
       setShowDeleteModal(false);
       setDeleteTarget(null);
       setShowEventModal(false);
       setEditingEvent(null);
+      await loadEvents();
     } catch (e) {
-      alert(`Failed to delete series: ${e && (e.message || e.code || e)}`);
+      alert(`Failed to delete series: ${e.message}`);
     }
   };
 
-  // Optional fallback: best-effort series delete when older events lack seriesId
   const deleteBestEffortSeries = async () => {
     if (!deleteTarget) return;
     try {
-      // Match by same title and repeat cadence within +/- 2 days across future months
       const baseTitle = deleteTarget.title || '';
       const baseDate = deleteTarget.date instanceof Date ? deleteTarget.date : new Date(deleteTarget.date);
       const isSameDay = (d1, d2) => Math.abs((new Date(d1) - new Date(d2)) / (1000 * 60 * 60 * 24)) <= 2;
       const sameTitle = (t) => (t || '').trim().toLowerCase() === baseTitle.trim().toLowerCase();
       const candidates = events.filter(ev => ev.id !== deleteTarget.id && sameTitle(ev.title) && isSameDay(ev.date.getDate(), baseDate.getDate()));
-      const deletions = [deleteTarget, ...candidates].map(ev => deleteDoc(doc(db, 'events', ev.id)));
+      
+      const deletions = [deleteTarget, ...candidates].map(ev => 
+        fetch(`${API_BASE}/api/calendar/events?id=${ev.id}`, { method: 'DELETE' })
+      );
       await Promise.allSettled(deletions);
       setShowDeleteModal(false);
       setDeleteTarget(null);
       setShowEventModal(false);
       setEditingEvent(null);
+      await loadEvents();
     } catch (e) {
-      alert(`Failed to delete related events: ${e && (e.message || e.code || e)}`);
+      alert(`Failed to delete related events: ${e.message}`);
     }
   };
 
   const handleSaveReceipt = async () => {
     const receiptData = {
-      ...newReceipt,
+      store: newReceipt.store,
       total: parseFloat(newReceipt.total) || 0,
-      date: new Date(newReceipt.date),
+      date: newReceipt.date.toISOString().split('T')[0]
     };
-    await addDoc(collection(db, 'receipts'), receiptData);
-    setShowReceiptModal(false);
-    setNewReceipt({ store: '', total: '', date: new Date() });
+    
+    try {
+      await fetch(`${API_BASE}/api/calendar/receipts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(receiptData)
+      });
+      setShowReceiptModal(false);
+      setNewReceipt({ store: '', total: '', date: new Date() });
+      await loadReceipts();
+    } catch (e) {
+      alert(`Failed to save receipt: ${e.message}`);
+    }
   };
   
   const openEditModal = (event) => {
@@ -757,13 +759,7 @@ const CateringSalesApp = () => {
                 <Plus className="w-4 h-4" />
                 <span>New Event</span>
               </button>
-              {auth && (
-                user ? (
-                  <button onClick={signOutUser} className="text-sm text-gray-600 hover:text-gray-900">Sign out</button>
-                ) : (
-                  <button onClick={signInWithGoogle} className="text-sm text-gray-600 hover:text-gray-900">Sign in</button>
-                )
-              )}
+
             </div>
           </div>
           
